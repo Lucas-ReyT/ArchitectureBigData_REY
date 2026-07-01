@@ -1,0 +1,15 @@
+logs/
+KboOpenData_*/
+data/
+kbo/
+iframe_figures/
+plugins/
+.venv/
+.ipynb_checkpoints/
+.DS_Store
+*.db
+notaire_cookies.json
+__pycache__/
+*.pyc
+.env
+.claude/

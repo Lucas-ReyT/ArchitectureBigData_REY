@@ -1,0 +1,14 @@
+
+requests[socks]>=2.31.0
+PySocks>=1.7.1
+
+
+pymongo>=4.6.0
+beautifulsoup4>=4.12.0
+pdfplumber>=0.10.0
+pandas>=2.0.0
+playwright>=1.40.0
+plotly>=5.18.0
+matplotlib>=3.8.0
+nbformat>=5.10.0
+hdfs>=2.7.3
