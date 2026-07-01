@@ -156,6 +156,10 @@ def build_silver(kbo_path: str = DEFAULT_KBO_PATH) -> None:
     rego_addresses = _load_rego_addresses(kbo, known_nums)
     denominations = _load_denominations(kbo, known_nums)
 
+    # Index créé AVANT la boucle : sans lui, chaque upsert doit scanner toute la
+    # collection en cours de croissance pour verifier l'existence du doc (O(n^2)).
+    db.enterprise_silver.create_index("enterprise_number", unique=True, name="idx_silver_enterprise_number")
+
     log.info("Construction de enterprise_silver...")
     ops = []
     count = 0
@@ -206,8 +210,6 @@ def build_silver(kbo_path: str = DEFAULT_KBO_PATH) -> None:
 
     if ops:
         db.enterprise_silver.bulk_write(ops, ordered=False)
-
-    db.enterprise_silver.create_index("enterprise_number", unique=True, name="idx_silver_enterprise_number")
 
     total = db.enterprise_silver.count_documents({})
     log.info("=" * 60)
