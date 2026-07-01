@@ -61,6 +61,12 @@ HDFS_BRONZE = "/data/bronze"
             type="integer",
             description="Offset MongoDB pour distribuer les runs parallèles",
         ),
+        "sector": Param(
+            default="",
+            type="string",
+            description="Secteur cible (ex. 'hotellerie') — si renseigné, la liste d'entreprises "
+                        "vient de scrape_targets au lieu du mode bulk MongoDB",
+        ),
     },
 )
 def enterprise_ingestion():
@@ -71,16 +77,26 @@ def enterprise_ingestion():
         """
         Retourne la liste des numéros BCE à traiter.
         - Si enterprise_number fourni → [enterprise_number]
+        - Sinon si sector fourni → cibles pending/in_progress depuis scrape_targets
         - Sinon → batch depuis MongoDB avec skip pour parallélisme
         """
         from db.mongo_client import get_db
+        from db.state_db import get_pending_targets, mark_target_in_progress
 
         params = context["params"]
         num    = params.get("enterprise_number", "").strip()
+        sector = params.get("sector", "").strip()
 
         if num:
             log.info(f"Mode ciblé : {num}")
             return [num]
+
+        if sector:
+            nums = get_pending_targets(sector)
+            for n in nums:
+                mark_target_in_progress(n, sector)
+            log.info(f"Mode sectoriel ({sector}) : {len(nums)} entreprises depuis scrape_targets")
+            return nums
 
         db    = get_db()
         batch = params["batch_size"]
@@ -250,11 +266,35 @@ def enterprise_ingestion():
             "ejustice":    ejustice_result,
         }
 
-    # ── Câblage 
+    # ── Task 5 : Mise à jour des cibles sectorielles (scrape_targets)
+    @task(task_id="update_target_status")
+    def update_target_status(enterprise_numbers: list[str], cbso_result: dict, **context) -> None:
+        """
+        Si `sector` est renseigné, marque chaque entreprise scrape_targets en status=done
+        avec filings_count = nombre de dépôts CBSO réussis (State DB).
+        """
+        from db.state_db import get_stats, mark_target_done
+
+        sector = context["params"].get("sector", "").strip()
+        if not sector:
+            return
+
+        for num in enterprise_numbers:
+            stats = get_stats(num)
+            filings_count = sum(
+                count for key, count in stats.items()
+                if key.startswith("cbso/") and key.endswith("/done")
+            )
+            mark_target_done(num, sector, filings_count)
+
+        log.info(f"[Targets] {len(enterprise_numbers)} cibles mises à jour pour le secteur {sector}")
+
+    # ── Câblage
     nums = resolve_enterprises()
     cbso = ingest_cbso(nums)
     ej   = ingest_ejustice(nums)
     ingestion_report(nums, cbso, ej)
+    update_target_status(nums, cbso)
 
 
 enterprise_ingestion()

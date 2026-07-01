@@ -11,6 +11,7 @@ Utilisation :
 Collections :
     enterprises     — entreprises belges (source : KBO CSV)
     download_state  — état de chaque fichier téléchargé (State DB)
+    scrape_targets  — suivi par entreprise (pending/in_progress/done) pour un ciblage sectoriel
 """
 
 import logging
@@ -74,6 +75,16 @@ def init_indexes() -> None:
     )
     db.download_state.create_index(
         [("downloaded_at", DESCENDING)], name="idx_state_date"
+    )
+
+    # ── scrape_targets ───────────────────────────────────────────────────────
+    db.scrape_targets.create_index(
+        [("enterprise_number", ASCENDING), ("sector", ASCENDING)],
+        unique=True,
+        name="idx_target_unique",
+    )
+    db.scrape_targets.create_index(
+        [("sector", ASCENDING), ("status", ASCENDING)], name="idx_target_sector_status"
     )
 
     log.info("Index MongoDB créés")

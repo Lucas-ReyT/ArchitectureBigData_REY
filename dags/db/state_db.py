@@ -232,3 +232,75 @@ def bulk_mark_pending(
     result = db.download_state.bulk_write(ops, ordered=False)
     log.info(f"[StateDB] bulk_pending : {result.upserted_count} nouveaux, {result.matched_count} existants")
     return result.upserted_count
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Ciblage sectoriel (collection scrape_targets — suivi par entreprise, pas par fichier)
+# ─────────────────────────────────────────────────────────────────────────────
+
+TargetStatus = Literal["pending", "in_progress", "done"]
+
+
+def create_targets(
+    sector: str,
+    enterprise_numbers: list[str],
+    db: Database | None = None,
+) -> int:
+    """Peuple scrape_targets en status='pending' pour un secteur (idempotent)."""
+    db = db or get_db()
+    if not enterprise_numbers:
+        return 0
+
+    now = _now()
+    ops = [
+        UpdateOne(
+            {"enterprise_number": num, "sector": sector},
+            {"$setOnInsert": {
+                "enterprise_number": num,
+                "sector":            sector,
+                "status":            "pending",
+                "filings_count":     0,
+                "created_at":        now,
+                "updated_at":        now,
+            }},
+            upsert=True,
+        )
+        for num in enterprise_numbers
+    ]
+    result = db.scrape_targets.bulk_write(ops, ordered=False)
+    log.info(f"[StateDB] targets/{sector} : {result.upserted_count} nouveaux, {result.matched_count} existants")
+    return result.upserted_count
+
+
+def get_pending_targets(sector: str, db: Database | None = None) -> list[str]:
+    """Retourne les enterprise_number en status pending/in_progress pour ce secteur."""
+    db = db or get_db()
+    return [
+        doc["enterprise_number"]
+        for doc in db.scrape_targets.find(
+            {"sector": sector, "status": {"$in": ["pending", "in_progress"]}},
+            {"enterprise_number": 1},
+        )
+    ]
+
+
+def mark_target_in_progress(enterprise_number: str, sector: str, db: Database | None = None) -> None:
+    db = db or get_db()
+    db.scrape_targets.update_one(
+        {"enterprise_number": enterprise_number, "sector": sector},
+        {"$set": {"status": "in_progress", "updated_at": _now()}},
+    )
+
+
+def mark_target_done(
+    enterprise_number: str,
+    sector: str,
+    filings_count: int,
+    db: Database | None = None,
+) -> None:
+    db = db or get_db()
+    db.scrape_targets.update_one(
+        {"enterprise_number": enterprise_number, "sector": sector},
+        {"$set": {"status": "done", "filings_count": filings_count, "updated_at": _now()}},
+    )
+    log.info(f"[StateDB] target done → {enterprise_number}/{sector} : {filings_count} dépôts")
