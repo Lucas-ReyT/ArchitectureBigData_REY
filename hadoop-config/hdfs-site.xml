@@ -20,10 +20,14 @@
     <name>dfs.webhdfs.enabled</name>
     <value>true</value>
   </property>
-  <!-- WebHDFS depuis l'hôte (WSL) : rediriger vers localhost:9864 -->
+  <!-- Nom du datanode utilisé dans les redirections WebHDFS (CREATE/OPEN).
+       "datanode" (nom du service Docker) permet aux conteneurs (Airflow) d'écrire dans HDFS.
+       Depuis l'hôte (scripts standalone), il faut un alias "datanode -> 127.0.0.1" dans le
+       fichier hosts, sinon utiliser HDFS_URL=http://localhost:9870 ne fonctionnera pas pour
+       les écritures (uniquement la lecture/listing). -->
   <property>
     <name>dfs.datanode.hostname</name>
-    <value>localhost</value>
+    <value>datanode</value>
   </property>
   <property>
     <name>dfs.datanode.http.address</name>

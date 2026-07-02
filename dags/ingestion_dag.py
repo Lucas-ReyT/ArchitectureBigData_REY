@@ -92,7 +92,7 @@ def enterprise_ingestion():
             return [num]
 
         if sector:
-            nums = get_pending_targets(sector)
+            nums = get_pending_targets(sector, limit=params.get("batch_size"))
             for n in nums:
                 mark_target_in_progress(n, sector)
             log.info(f"Mode sectoriel ({sector}) : {len(nums)} entreprises depuis scrape_targets")
@@ -271,7 +271,10 @@ def enterprise_ingestion():
     def update_target_status(enterprise_numbers: list[str], cbso_result: dict, **context) -> None:
         """
         Si `sector` est renseigné, marque chaque entreprise scrape_targets en status=done
-        avec filings_count = nombre de dépôts CBSO réussis (State DB).
+        (avec filings_count = dépôts CBSO réussis) UNIQUEMENT si aucun dépôt n'est resté en
+        erreur — sinon on laisse la cible en in_progress pour qu'elle soit retentée au
+        prochain run (sinon une erreur transitoire la marquerait "done" à tort et elle ne
+        serait plus jamais reprise).
         """
         from db.state_db import get_stats, mark_target_done
 
@@ -281,11 +284,18 @@ def enterprise_ingestion():
 
         for num in enterprise_numbers:
             stats = get_stats(num)
-            filings_count = sum(
+            done_count = sum(
                 count for key, count in stats.items()
                 if key.startswith("cbso/") and key.endswith("/done")
             )
-            mark_target_done(num, sector, filings_count)
+            error_count = sum(
+                count for key, count in stats.items()
+                if key.startswith("cbso/") and key.endswith("/error")
+            )
+            if error_count == 0:
+                mark_target_done(num, sector, done_count)
+            else:
+                log.info(f"[Targets] {num} : {error_count} erreur(s) restante(s) — cible laissée en in_progress")
 
         log.info(f"[Targets] {len(enterprise_numbers)} cibles mises à jour pour le secteur {sector}")
 

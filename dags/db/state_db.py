@@ -272,16 +272,20 @@ def create_targets(
     return result.upserted_count
 
 
-def get_pending_targets(sector: str, db: Database | None = None) -> list[str]:
+def get_pending_targets(
+    sector: str,
+    limit: int | None = None,
+    db: Database | None = None,
+) -> list[str]:
     """Retourne les enterprise_number en status pending/in_progress pour ce secteur."""
     db = db or get_db()
-    return [
-        doc["enterprise_number"]
-        for doc in db.scrape_targets.find(
-            {"sector": sector, "status": {"$in": ["pending", "in_progress"]}},
-            {"enterprise_number": 1},
-        )
-    ]
+    cursor = db.scrape_targets.find(
+        {"sector": sector, "status": {"$in": ["pending", "in_progress"]}},
+        {"enterprise_number": 1},
+    )
+    if limit:
+        cursor = cursor.limit(limit)
+    return [doc["enterprise_number"] for doc in cursor]
 
 
 def mark_target_in_progress(enterprise_number: str, sector: str, db: Database | None = None) -> None:
