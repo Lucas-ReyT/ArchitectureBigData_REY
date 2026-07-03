@@ -87,4 +87,8 @@ def init_indexes() -> None:
         [("sector", ASCENDING), ("status", ASCENDING)], name="idx_target_sector_status"
     )
 
+    # ── enterprise_silver ────────────────────────────────────────────────────
+    # Index texte pour que la recherche par nom (API) ne scanne pas les 1,95M documents.
+    db.enterprise_silver.create_index([("name", "text")], name="idx_silver_name_text")
+
     log.info("Index MongoDB créés")

@@ -25,6 +25,11 @@ HDFS_URL    = "http://namenode:9870"
 HDFS_USER   = "airflow"
 HDFS_BRONZE = "/data/bronze"
 
+# Formes juridiques non-commerciales a exclure en mode sectoriel (ASBL, associations sans
+# personnalite juridique, unites TVA, entites etrangeres/inconnues) — pour prioriser les
+# vraies societes commerciales quand on scrape un secteur (ex. hotellerie).
+NON_COMMERCIAL_LEGAL_FORMS = ["017", "721", "003", "030", "124", "999", "151"]
+
 
 @dag(
     dag_id="enterprise_ingestion",
@@ -92,7 +97,11 @@ def enterprise_ingestion():
             return [num]
 
         if sector:
-            nums = get_pending_targets(sector, limit=params.get("batch_size"))
+            nums = get_pending_targets(
+                sector,
+                limit=params.get("batch_size"),
+                exclude_legal_forms=NON_COMMERCIAL_LEGAL_FORMS,
+            )
             for n in nums:
                 mark_target_in_progress(n, sector)
             log.info(f"Mode sectoriel ({sector}) : {len(nums)} entreprises depuis scrape_targets")

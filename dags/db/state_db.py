@@ -275,17 +275,38 @@ def create_targets(
 def get_pending_targets(
     sector: str,
     limit: int | None = None,
+    exclude_legal_forms: list[str] | None = None,
     db: Database | None = None,
 ) -> list[str]:
-    """Retourne les enterprise_number en status pending/in_progress pour ce secteur."""
+    """
+    Retourne les enterprise_number en status pending/in_progress pour ce secteur.
+
+    exclude_legal_forms : si fourni, exclut les entreprises dont enterprises.legal_form
+    est dans cette liste (ex. ASBL, associations sans personnalite juridique) avant
+    d'appliquer limit — sert a prioriser les vraies societes commerciales dans un lot.
+    """
     db = db or get_db()
-    cursor = db.scrape_targets.find(
-        {"sector": sector, "status": {"$in": ["pending", "in_progress"]}},
-        {"enterprise_number": 1},
-    )
+    nums = [
+        doc["enterprise_number"]
+        for doc in db.scrape_targets.find(
+            {"sector": sector, "status": {"$in": ["pending", "in_progress"]}},
+            {"enterprise_number": 1},
+        )
+    ]
+
+    if exclude_legal_forms:
+        excluded = {
+            doc["enterprise_number"]
+            for doc in db.enterprises.find(
+                {"enterprise_number": {"$in": nums}, "legal_form": {"$in": exclude_legal_forms}},
+                {"enterprise_number": 1},
+            )
+        }
+        nums = [n for n in nums if n not in excluded]
+
     if limit:
-        cursor = cursor.limit(limit)
-    return [doc["enterprise_number"] for doc in cursor]
+        nums = nums[:limit]
+    return nums
 
 
 def mark_target_in_progress(enterprise_number: str, sector: str, db: Database | None = None) -> None:

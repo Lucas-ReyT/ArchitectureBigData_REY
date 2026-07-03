@@ -162,6 +162,24 @@ services:
     networks:
       - ingestion-net
 
+  # ── API FastAPI (Gold + Silver) ─────────────────────────────────────────────
+  api:
+    build: ./backend
+    container_name: hotel-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      MONGO_URI: "mongodb://mongo:27017"
+      MONGO_DB: "belgique"
+      HDFS_URL: "http://namenode:9870"
+      HDFS_USER: "airflow"
+    depends_on:
+      - mongo
+      - namenode
+    networks:
+      - ingestion-net
+
   # ── Mongo Express (UI) ─────────────────────────────────────────────────────
   mongo-express:
     image: mongo-express:1.0
